@@ -95,4 +95,44 @@ public class GameServer {
             e.printStackTrace();
         }
     }
+
+    /**
+     * Resets the game board and player state to initial values.
+     * Called at server start and after each game ends.
+     */
+    private static void resetBoard() {
+        // Reset grid state
+        for (int row = 0; row < GRID_SIZE; row++) {
+            for (int col = 0; col < GRID_SIZE; col++) {
+                boardState[row][col] = "UNCLAIMED";
+                heldState[row][col] = new HashMap<>();
+            }
+        }
+        
+        // Reset team data
+        teamAPlayers.clear();
+        teamBPlayers.clear();
+        teamACount = 0;
+        teamBCount = 0;
+        
+        // Reset client tracking
+        clients.clear();
+        clientCounter = 0;
+        
+        // Cancel any active timers
+        claimTimers.clear();
+    }
+
+    /**
+     * Broadcasts the current game board state to all connected clients.
+     *
+     * @throws IOException If there's an error sending the game state
+     */
+    private static void broadcastGameState() throws IOException {
+        synchronized (clients) {
+            for (ClientHandler clientHandler : clients.values()) {
+                clientHandler.sendGameState(boardState);
+            }
+        }
+    }
 }
