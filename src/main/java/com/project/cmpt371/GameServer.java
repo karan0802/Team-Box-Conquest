@@ -219,4 +219,52 @@ public class GameServer {
             }
         }
     }
+
+    /**
+     * Schedules a timer for claiming a square after the required hold period (2 seconds).
+     * The timer only executes if one team is still holding when it expires.
+     *
+     * @param row The row of the square
+     * @param col The column of the square
+     */
+    private static void scheduleClaimTimer(int row, int col) {
+        String key = row + "," + col;
+        ScheduledFuture<?> future = timerService.schedule(() -> {
+            synchronized (boardState) {
+                Map<String, Integer> holdMap = heldState[row][col];
+                if (holdMap.size() == 1) {
+                    // Timer completed - award square to the holding team
+                    String team = holdMap.keySet().iterator().next();
+                    boardState[row][col] = team;
+                    heldState[row][col].clear();
+                    try {
+                        // Broadcast updates and check for win
+                        broadcastGameState();
+                        checkWinCondition(null);
+                        broadcastTeamScores();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        }, 2, TimeUnit.SECONDS);
+        
+        // Store the timer for potential cancellation
+        claimTimers.put(key, future);
+    }
+
+    /**
+     * Cancels an active claim timer for a grid square.
+     * Used when a square becomes contested or when a claim completes.
+     *
+     * @param row The row of the square
+     * @param col The column of the square
+     */
+    private static void cancelClaimTimer(int row, int col) {
+        String key = row + "," + col;
+        ScheduledFuture<?> future = claimTimers.remove(key);
+        if (future != null) {
+            future.cancel(false);
+        }
+    }
 }
