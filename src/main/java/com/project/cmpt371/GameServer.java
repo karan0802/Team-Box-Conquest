@@ -267,4 +267,34 @@ public class GameServer {
             future.cancel(false);
         }
     }
+
+    /**
+     * Broadcasts to all clients that a team has started holding a square.
+     *
+     * @param row The row of the square
+     * @param col The column of the square
+     * @param team The team that started holding
+     */
+    private static void broadcastHoldInfo(int row, int col, String team) {
+        synchronized (clients) {
+            for (ClientHandler clientHandler : clients.values()) {
+                clientHandler.sendMessage("HOLD_START " + row + " " + col + " " + team);
+            }
+        }
+    }
+
+    /**
+     * Broadcasts to all clients that a team has released a square.
+     *
+     * @param row The row of the square
+     * @param col The column of the square
+     * @param team The team that released
+     */
+    private static void broadcastReleaseInfo(int row, int col, String team) {
+        synchronized (clients) {
+            for (ClientHandler clientHandler : clients.values()) {
+                clientHandler.sendMessage("HOLD_END " + row + " " + col + " " + team);
+            }
+        }
+    }
 }
