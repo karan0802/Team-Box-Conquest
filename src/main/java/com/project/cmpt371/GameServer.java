@@ -297,4 +297,138 @@ public class GameServer {
             }
         }
     }
+
+    /**
+     * Checks if either team has met the win condition.
+     * A team wins by having 10 consecutive squares in any direction
+     * or by having the most consecutive squares when the board is full.
+     *
+     * @param client The client that triggered the check (not used)
+     */
+    private static void checkWinCondition(ClientHandler client) {
+        // Calculate longest consecutive sequences for each team
+        int maxA = getMaxConsecutive("TEAM_A");
+        int maxB = getMaxConsecutive("TEAM_B");
+
+        // Check primary win condition - 10 consecutive squares
+        if (maxA >= 10) {
+            broadcastWinCondition("TEAM_A");
+            resetBoard();
+        } else if (maxB >= 10) {
+            broadcastWinCondition("TEAM_B");
+            resetBoard();
+        } else if (isBoardFull()) {
+            // Board is full - determine winner by longest sequence
+            String winner = maxA > maxB ? "TEAM_A" : maxA < maxB ? "TEAM_B" : "TIE";
+            broadcastWinCondition(winner);
+            resetBoard();
+        }
+    }
+
+    /**
+     * Checks if the game board is completely filled (no unclaimed squares).
+     *
+     * @return true if the board is full, false otherwise
+     */
+    private static boolean isBoardFull() {
+        for (int row = 0; row < GRID_SIZE; row++) {
+            for (int col = 0; col < GRID_SIZE; col++) {
+                if ("UNCLAIMED".equals(boardState[row][col])) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Calculates the maximum number of consecutive squares claimed by a team.
+     * Checks horizontal, vertical, and both diagonal directions.
+     *
+     * @param team The team to check ("TEAM_A" or "TEAM_B")
+     * @return The maximum consecutive count
+     */
+    private static int getMaxConsecutive(String team) {
+        int max = 0;
+        
+        // Check horizontal rows
+        for (int row = 0; row < GRID_SIZE; row++) {
+            int count = 0;
+            for (int col = 0; col < GRID_SIZE; col++) {
+                if (boardState[row][col].equals(team)) {
+                    count++;
+                    max = Math.max(max, count);
+                } else {
+                    count = 0;
+                }
+            }
+        }
+        
+        // Check vertical columns
+        for (int col = 0; col < GRID_SIZE; col++) {
+            int count = 0;
+            for (int row = 0; row < GRID_SIZE; row++) {
+                if (boardState[row][col].equals(team)) {
+                    count++;
+                    max = Math.max(max, count);
+                } else {
+                    count = 0;
+                }
+            }
+        }
+        
+        // Check diagonal (top-left to bottom-right), starting from leftmost column
+        for (int startRow = 0; startRow < GRID_SIZE; startRow++) {
+            int count = 0;
+            for (int row = startRow, col = 0; row < GRID_SIZE && col < GRID_SIZE; row++, col++) {
+                if (boardState[row][col].equals(team)) {
+                    count++;
+                    max = Math.max(max, count);
+                } else {
+                    count = 0;
+                }
+            }
+        }
+        
+        // Check diagonal (top-left to bottom-right), starting from top row
+        for (int startCol = 1; startCol < GRID_SIZE; startCol++) {
+            int count = 0;
+            for (int row = 0, col = startCol; row < GRID_SIZE && col < GRID_SIZE; row++, col++) {
+                if (boardState[row][col].equals(team)) {
+                    count++;
+                    max = Math.max(max, count);
+                } else {
+                    count = 0;
+                }
+            }
+        }
+        
+        // Check diagonal (top-right to bottom-left), starting from rightmost column
+        for (int startRow = 0; startRow < GRID_SIZE; startRow++) {
+            int count = 0;
+            for (int row = startRow, col = GRID_SIZE - 1; row < GRID_SIZE && col >= 0; row++, col--) {
+                if (boardState[row][col].equals(team)) {
+                    count++;
+                    max = Math.max(max, count);
+                } else {
+                    count = 0;
+                }
+            }
+        }
+        
+        // Check diagonal (top-right to bottom-left), starting from top row
+        for (int startCol = GRID_SIZE - 2; startCol >= 0; startCol--) {
+            int count = 0;
+            for (int row = 0, col = startCol; row < GRID_SIZE && col >= 0; row++, col--) {
+                if (boardState[row][col].equals(team)) {
+                    count++;
+                    max = Math.max(max, count);
+                } else {
+                    count = 0;
+                }
+            }
+        }
+        
+        return max;
+    }
 }
