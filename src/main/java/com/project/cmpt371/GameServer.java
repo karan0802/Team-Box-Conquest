@@ -431,4 +431,43 @@ public class GameServer {
         
         return max;
     }
+
+    /**
+     * Broadcasts the game over message to all clients with the winner information.
+     *
+     * @param winner The winning team ("TEAM_A", "TEAM_B", or "TIE")
+     */
+    private static void broadcastWinCondition(String winner) {
+        synchronized (clients) {
+            for (ClientHandler clientHandler : clients.values()) {
+                clientHandler.sendMessage("GAME_OVER " + winner);
+            }
+        }
+    }
+
+    /**
+     * Broadcasts the current team scores (longest consecutive sequences) to all clients.
+     */
+    private static void broadcastTeamScores() {
+        int maxA = getMaxConsecutive("TEAM_A");
+        int maxB = getMaxConsecutive("TEAM_B");
+        synchronized (clients) {
+            for (ClientHandler clientHandler : clients.values()) {
+                clientHandler.sendMessage("TEAM_SCORES " + maxA + " " + maxB);
+            }
+        }
+    }
+
+    /**
+     * Broadcasts the current team player lists to all clients.
+     */
+    private static void broadcastTeamLists() {
+        String teamAList = String.join(",", teamAPlayers);
+        String teamBList = String.join(",", teamBPlayers);
+        synchronized (clients) {
+            for (ClientHandler clientHandler : clients.values()) {
+                clientHandler.sendMessage("TEAM_LISTS " + teamAList + " " + teamBList);
+            }
+        }
+    }
 }
