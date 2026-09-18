@@ -470,4 +470,224 @@ public class GameServer {
             }
         }
     }
+
+    /**
+     * The ClientHandler class manages communication with a single connected client.
+     * It processes incoming messages and manages the client's state in the game.
+     */
+    static class ClientHandler implements Runnable {
+        /** Socket for communication with the client */
+        private Socket socket;
+        
+        /** Input stream for receiving messages from the client */
+        private DataInputStream inputStream;
+        
+        /** Output stream for sending messages to the client */
+        private DataOutputStream outputStream;
+        
+        /** The team assigned to this client */
+        private String team;
+        
+        /** The player's name */
+        private String playerName;
+        
+        /** Unique identifier for this client */
+        private String clientId;
+
+        /**
+         * Creates a new client handler for the given socket and ID.
+         *
+         * @param socket The client socket
+         * @param clientId The unique client identifier
+         */
+        public ClientHandler(Socket socket, String clientId) {
+            this.socket = socket;
+            this.clientId = clientId;
+        }
+
+        /**
+         * Main processing loop for client messages.
+         * Handles initial connection setup and subsequent game actions.
+         */
+        @Override
+        public void run() {
+            try {
+                // Set up data streams
+                inputStream = new DataInputStream(socket.getInputStream());
+                outputStream = new DataOutputStream(socket.getOutputStream());
+
+                // Handle initial message
+                String initMessage = inputStream.readUTF();
+                
+                // Check if this is a capacity check or team status request
+                if (initMessage.equals("CHECK_CAPACITY")) {
+                    synchronized (clients) {
+                        outputStream.writeUTF(clients.size() < MAX_TOTAL_PLAYERS ? "OK" : "SERVER_FULL");
+                    }
+                    socket.close();
+                    return;
+                } else if (initMessage.equals("TEAM_STATUS_REQUEST")) {
+                    synchronized (GameServer.class) {
+                        outputStream.writeUTF("TEAM_STATUS " + teamACount + " " + teamBCount);
+                    }
+                    socket.close();
+                    return;
+                }
+
+                // Process player information and team assignment
+                if (initMessage.startsWith("PLAYER_INFO")) {
+                    String[] parts = initMessage.split(" ");
+                    playerName = parts[1];
+                    String requestedTeam = parts[2];
+
+                    // Assign player to requested team if space available
+                    synchronized (GameServer.class) {
+                        if (requestedTeam.equals("TEAM_A") && teamACount < MAX_PLAYERS_PER_TEAM) {
+                            team = "TEAM_A";
+                            teamACount++;
+                            teamAPlayers.add(playerName);
+                        } else if (requestedTeam.equals("TEAM_B") && teamBCount < MAX_PLAYERS_PER_TEAM) {
+                            team = "TEAM_B";
+                            teamBCount++;
+                            teamBPlayers.add(playerName);
+                        } else {
+                            // Team full or invalid request
+                            sendMessage("TEAM_FULL");
+                            socket.close();
+                            return;
+                        }
+                    }
+                    
+                    // Notify clients of new player
+                    System.out.println(clientId + " (" + playerName + ") assigned to " + team);
+                    sendMessage("TEAM_ASSIGNMENT " + team + " " + playerName);
+                    broadcastMessage("CHAT " + playerName + " connected");
+                    broadcastTeamLists();
+                    sendGameState(boardState);
+                    sendInitialHeldState();
+                    broadcastTeamScores();
+                }
+
+                // Main message processing loop
+                while (true) {
+                    String message = inputStream.readUTF();
+                    
+                    // Process message based on type
+                    if (message.startsWith("HOLD_START")) {
+                        int row = Integer.parseInt(message.split(" ")[1]);
+                        int col = Integer.parseInt(message.split(" ")[2]);
+                        handleHoldRequest(this, row, col);
+                    } else if (message.startsWith("HOLD_END")) {
+                        int row = Integer.parseInt(message.split(" ")[1]);
+                        int col = Integer.parseInt(message.split(" ")[2]);
+                        handleReleaseRequest(this, row, col);
+                    } else if (message.startsWith("CHAT")) {
+                        String chatMsg = message.substring(5);
+                        broadcastMessage("CHAT " + playerName + ": " + chatMsg);
+                    }
+                }
+            } catch (IOException e) {
+                System.out.println(clientId + " (" + playerName + ") disconnected: " + e.getMessage());
+            } finally {
+                // Clean up resources
+                try {
+                    if (!socket.isClosed()) {
+                        socket.close();
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                
+                // Remove client and update team counts
+                synchronized (clients) {
+                    clients.remove(clientId);
+                    if (team != null) {
+                        if ("TEAM_A".equals(team)) {
+                            teamACount--;
+                            teamAPlayers.remove(playerName);
+                        } else if ("TEAM_B".equals(team)) {
+                            teamBCount--;
+                            teamBPlayers.remove(playerName);
+                        }
+                        System.out.println("Player " + playerName + " left team " + team);
+                        broadcastMessage("CHAT " + playerName + " disconnected");
+                        broadcastTeamLists();
+                        broadcastTeamScores();
+                    }
+                }
+            }
+        }
+
+        /**
+         * Gets the team assigned to this client.
+         *
+         * @return The team ID ("TEAM_A" or "TEAM_B")
+         */
+        public String getTeam() {
+            return team;
+        }
+
+        /**
+         * Sends a message to this client.
+         *
+         * @param message The message to send
+         */
+        public void sendMessage(String message) {
+            try {
+                outputStream.writeUTF(message);
+                outputStream.flush();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        /**
+         * Broadcasts a message to all connected clients.
+         *
+         * @param message The message to broadcast
+         */
+        private void broadcastMessage(String message) {
+            synchronized (clients) {
+                for (ClientHandler client : clients.values()) {
+                    client.sendMessage(message);
+                }
+            }
+        }
+
+        /**
+         * Sends the current game state to this client.
+         *
+         * @param gameState The current board state
+         * @throws IOException If sending fails
+         */
+        public void sendGameState(String[][] gameState) throws IOException {
+            StringBuilder sb = new StringBuilder("GAME_STATE ");
+            for (int row = 0; row < GRID_SIZE; row++) {
+                for (int col = 0; col < GRID_SIZE; col++) {
+                    sb.append(gameState[row][col]).append(" ");
+                }
+            }
+            sendMessage(sb.toString().trim());
+        }
+
+        /**
+         * Sends the initial held state of the board to a newly connected client.
+         *
+         * @throws IOException If sending fails
+         */
+        public void sendInitialHeldState() throws IOException {
+            StringBuilder sb = new StringBuilder("INITIAL_HELD_STATE ");
+            for (int row = 0; row < GRID_SIZE; row++) {
+                for (int col = 0; col < GRID_SIZE; col++) {
+                    Map<String, Integer> holdMap = heldState[row][col];
+                    if (holdMap.isEmpty()) {
+                        sb.append("NONE ");
+                    } else {
+                        sb.append(String.join(",", holdMap.keySet())).append(" ");
+                    }
+                }
+            }
+            sendMessage(sb.toString().trim());
+        }
+    }
 }
