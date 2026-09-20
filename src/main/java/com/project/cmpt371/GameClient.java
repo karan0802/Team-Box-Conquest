@@ -135,4 +135,156 @@ public class GameClient extends Application {
         // Start a separate thread for listening to server messages
         new Thread(this::listenForMessages).start();
     }
+
+    /**
+     * Sets up the user interface, including the game grid, team lists, and chat components.
+     */
+    private void setupUI() {
+        // Initialize grid components
+        gridSquares = new HashMap<>();
+        gridPane = new GridPane();
+        gridPane.setVgap(5);
+        gridPane.setHgap(5);
+        gridPane.getStyleClass().add("grid-pane");
+
+        // Create grid squares
+        for (int row = 0; row < GRID_SIZE; row++) {
+            for (int col = 0; col < GRID_SIZE; col++) {
+                final int finalRow = row;
+                final int finalCol = col;
+                String key = finalRow + "," + finalCol;
+
+                // Create a square for this grid position
+                Rectangle square = new Rectangle(50, 50, Color.LIGHTGRAY);
+                square.setStroke(Color.BLACK);
+                square.getStyleClass().add("grid-square");
+
+                // Store square reference and add to grid
+                gridSquares.put(key, square);
+                gridPane.add(square, col, row);
+            }
+        }
+
+        // Set up score displays
+        redScoreText = new Text("0");
+        HBox redScoreBox = new HBox(redScoreText);
+        redScoreBox.setId("redScoreBox");
+        redScoreBox.setAlignment(Pos.CENTER);
+
+        blueScoreText = new Text("0");
+        HBox blueScoreBox = new HBox(blueScoreText);
+        blueScoreBox.setId("blueScoreBox");
+        blueScoreBox.setAlignment(Pos.CENTER);
+
+        // Create top section with scores
+        HBox topBox = new HBox(20, redScoreBox, blueScoreBox);
+        topBox.setAlignment(Pos.CENTER);
+        topBox.setPadding(new Insets(15));
+
+        // Create game info text
+        gameInfo = new Text("Connecting to server, please wait...");
+        gameInfo.setId("gameInfo");
+
+        // Wrap grid in a container for styling
+        StackPane gridContainer = new StackPane(gridPane);
+        gridContainer.getStyleClass().add("grid-container");
+        gridContainer.setMaxWidth(600);
+        gridContainer.setMaxHeight(600);
+
+        // Create center section with game info and grid
+        VBox centerBox = new VBox(15, gameInfo, gridContainer);
+        centerBox.setAlignment(Pos.CENTER);
+
+        // Set up team lists
+        Label teamAHeader = new Label("Red Team");
+        teamAHeader.getStyleClass().add("team-header");
+
+        Label teamBHeader = new Label("Blue Team");
+        teamBHeader.getStyleClass().add("team-header");
+
+        teamAList = new TextArea();
+        teamAList.setEditable(false);
+        teamAList.getStyleClass().add("team-a-list");
+
+        teamBList = new TextArea();
+        teamBList.setEditable(false);
+        teamBList.getStyleClass().add("team-b-list");
+
+        // Create leave game button
+        Button leaveButton = new Button("Leave Game");
+        leaveButton.setOnAction(e -> {
+            isRunning = false;
+            try {
+                socket.close();
+                primaryStage.close();
+            } catch (IOException ex) {
+                ex.printStackTrace();
+            }
+        });
+
+        // Organize team sections
+        VBox teamASection = new VBox(5, teamAHeader, teamAList);
+        VBox teamBSection = new VBox(5, teamBHeader, teamBList);
+
+        // Create right sidebar with team info and leave button
+        VBox rightBox = new VBox(15, teamASection, teamBSection, leaveButton);
+        rightBox.setAlignment(Pos.TOP_CENTER);
+        rightBox.setPadding(new Insets(15));
+        rightBox.setPrefWidth(200);
+        rightBox.setMaxWidth(200);
+
+        // Set up chat components
+        Label chatLabel = new Label("Chat");
+        chatLabel.getStyleClass().add("chat-header");
+
+        chatArea = new TextArea();
+        chatArea.setId("chatArea");
+        chatArea.setEditable(false);
+
+        chatInput = new TextField();
+        chatInput.setPromptText("Type a message...");
+        chatInput.setOnAction(e -> {
+            String message = chatInput.getText().trim();
+            if (!message.isEmpty()) {
+                try {
+                    outputStream.writeUTF("CHAT " + message);
+                    outputStream.flush();
+                    chatInput.clear();
+                } catch (IOException ex) {
+                    ex.printStackTrace();
+                }
+            }
+        });
+
+        // Create chat section
+        VBox chatBox = new VBox(10, chatLabel, chatArea, chatInput);
+        chatBox.setPadding(new Insets(15));
+        chatBox.setMaxHeight(200);
+
+        // Assemble main layout
+        BorderPane root = new BorderPane();
+        root.setTop(topBox);
+        root.setCenter(centerBox);
+        root.setRight(rightBox);
+        root.setBottom(chatBox);
+
+        // Create scene and add styling
+        Scene scene = new Scene(root, 800, 600);
+        scene.getStylesheets().add(getClass().getResource("/css/client-style.css").toExternalForm());
+        primaryStage.setTitle("Team Box Conquest - " + playerName);
+        primaryStage.setScene(scene);
+        
+        // Handle window close event
+        primaryStage.setOnCloseRequest(event -> {
+            isRunning = false;
+            try {
+                if (!socket.isClosed()) socket.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        });
+        
+        // Show the window
+        primaryStage.show();
+    }
 }
