@@ -287,4 +287,69 @@ public class GameClient extends Application {
         // Show the window
         primaryStage.show();
     }
+
+    /**
+     * Sets up interaction handlers for grid squares based on the player's assigned team.
+     * This is called after receiving team assignment from the server.
+     */
+    private void setupInteractions() {
+        for (int row = 0; row < GRID_SIZE; row++) {
+            for (int col = 0; col < GRID_SIZE; col++) {
+                final int finalRow = row;
+                final int finalCol = col;
+                String key = finalRow + "," + finalCol;
+                Rectangle square = gridSquares.get(key);
+
+                // Mouse press handler - start holding a square
+                square.setOnMousePressed(event -> {
+                    // Allow interaction with any unclaimed block
+                    if (event.isPrimaryButtonDown() && "UNCLAIMED".equals(boardState[finalRow][finalCol])) {
+                        try {
+                            outputStream.writeUTF("HOLD_START " + finalRow + " " + finalCol);
+                            outputStream.flush();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                });
+
+                // Mouse release handler - stop holding a square
+                square.setOnMouseReleased(event -> {
+                    try {
+                        outputStream.writeUTF("HOLD_END " + finalRow + " " + finalCol);
+                        outputStream.flush();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                });
+
+                // Mouse enter handler - show team-specific cursor on hover
+                square.setOnMouseEntered(event -> {
+                    if ("UNCLAIMED".equals(boardState[finalRow][finalCol])) {
+                        if ("TEAM_A".equals(assignedTeam)) {
+                            square.getStyleClass().add("team-a-cursor");
+                        } else {
+                            square.getStyleClass().add("team-b-cursor");
+                        }
+                    }
+                });
+
+                // Mouse exit handler - remove cursor styling
+                square.setOnMouseExited(event -> {
+                    square.getStyleClass().removeAll("team-a-cursor", "team-b-cursor");
+                });
+            }
+        }
+
+        // Apply team-specific styling to the grid
+        if ("TEAM_A".equals(assignedTeam)) {
+            gridPane.getStyleClass().add("team-a-grid");
+        } else {
+            gridPane.getStyleClass().add("team-b-grid");
+        }
+
+        // Update window title with player name and team
+        primaryStage.setTitle("Team Box Conquest - " + playerName + " (" +
+                ("TEAM_A".equals(assignedTeam) ? "Red" : "Blue") + " Team)");
+    }
 }
