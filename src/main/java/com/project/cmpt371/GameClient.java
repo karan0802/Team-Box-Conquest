@@ -352,4 +352,115 @@ public class GameClient extends Application {
         primaryStage.setTitle("Team Box Conquest - " + playerName + " (" +
                 ("TEAM_A".equals(assignedTeam) ? "Red" : "Blue") + " Team)");
     }
+
+    /**
+     * Listens for messages from the server in a loop and processes them accordingly.
+     * This method runs in a separate thread.
+     */
+    private void listenForMessages() {
+        try {
+            while (isRunning) {
+                String message = inputStream.readUTF();
+                System.out.println("Client " + playerName + " received: " + message);
+
+                // Process message based on its type
+                if (message.startsWith("TEAM_ASSIGNMENT")) {
+                    // Handle team assignment message
+                    String[] parts = message.split(" ");
+                    assignedTeam = parts[1];
+                    String assignedName = parts[2];
+                    Platform.runLater(() -> {
+                        gameInfo.setText("Playing as " + assignedName + " on " + 
+                                (assignedTeam.equals("TEAM_A") ? "Red" : "Blue") + " Team");
+                        setupInteractions();
+                    });
+                } else if (message.startsWith("GAME_STATE")) {
+                    // Handle game state update message
+                    String[] state = message.split(" ");
+                    for (int i = 1, row = 0; row < GRID_SIZE; row++) {
+                        for (int col = 0; col < GRID_SIZE; col++, i++) {
+                            boardState[row][col] = state[i];
+                            final int finalRow = row;
+                            final int finalCol = col;
+                            Platform.runLater(() -> updateBoard(finalRow, finalCol));
+                        }
+                    }
+                } else if (message.startsWith("INITIAL_HELD_STATE")) {
+                    // Handle initial held state message
+                    String[] state = message.split(" ");
+                    for (int i = 1, row = 0; row < GRID_SIZE; row++) {
+                        for (int col = 0; col < GRID_SIZE; col++, i++) {
+                            String holding = state[i];
+                            heldState[row][col].clear();
+                            if (!"NONE".equals(holding)) {
+                                heldState[row][col].addAll(Arrays.asList(holding.split(",")));
+                            }
+                            final int finalRow = row;
+                            final int finalCol = col;
+                            Platform.runLater(() -> updateBoard(finalRow, finalCol));
+                        }
+                    }
+                } else if (message.startsWith("HOLD_START")) {
+                    // Handle hold start message
+                    String[] parts = message.split(" ");
+                    int row = Integer.parseInt(parts[1]);
+                    int col = Integer.parseInt(parts[2]);
+                    String team = parts[3];
+                    if (!heldState[row][col].contains(team)) {
+                        heldState[row][col].add(team);
+                    }
+                    Platform.runLater(() -> updateBoard(row, col));
+                } else if (message.startsWith("HOLD_END")) {
+                    // Handle hold end message
+                    String[] parts = message.split(" ");
+                    int row = Integer.parseInt(parts[1]);
+                    int col = Integer.parseInt(parts[2]);
+                    String team = parts[3];
+                    heldState[row][col].remove(team);
+                    Platform.runLater(() -> updateBoard(row, col));
+                } else if (message.startsWith("GAME_OVER")) {
+                    // Handle game over message
+                    String winner = message.split(" ")[1];
+                    Platform.runLater(() -> showWinScreen(winner));
+                } else if (message.equals("TEAM_FULL")) {
+                    // Handle team full message
+                    Platform.runLater(() -> {
+                        gameInfo.setText("Selected team is full! Please restart and choose another team.");
+                        try {
+                            socket.close();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    });
+                } else if (message.startsWith("TEAM_SCORES")) {
+                    // Handle team scores message
+                    String[] parts = message.split(" ");
+                    int maxA = Integer.parseInt(parts[1]);
+                    int maxB = Integer.parseInt(parts[2]);
+                    Platform.runLater(() -> {
+                        redScoreText.setText(String.valueOf(maxA));
+                        blueScoreText.setText(String.valueOf(maxB));
+                    });
+                } else if (message.startsWith("TEAM_LISTS")) {
+                    // Handle team lists message
+                    String[] parts = message.split(" ", 3);
+                    String teamA = parts[1];
+                    String teamB = parts[2];
+                    Platform.runLater(() -> {
+                        teamAList.setText(formatTeamList(teamA, "Red"));
+                        teamBList.setText(formatTeamList(teamB, "Blue"));
+                    });
+                } else if (message.startsWith("CHAT")) {
+                    // Handle chat message
+                    String chatMsg = message.substring(5);
+                    Platform.runLater(() -> chatArea.appendText(formatChatMessage(chatMsg) + "\n"));
+                }
+            }
+        } catch (IOException e) {
+            if (isRunning) {
+                System.out.println("Client " + playerName + " disconnected: " + e.getMessage());
+                Platform.runLater(() -> gameInfo.setText("Disconnected from server."));
+            }
+        }
+    }
 }
