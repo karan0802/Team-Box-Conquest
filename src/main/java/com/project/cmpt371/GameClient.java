@@ -463,4 +463,41 @@ public class GameClient extends Application {
             }
         }
     }
+
+    /**
+     * Formats a comma-separated list of team members for display.
+     * Highlights the current player with "(You)" suffix.
+     *
+     * @param teamList Comma-separated string of player names
+     * @param teamName Name of the team ("Red" or "Blue")
+     * @return Formatted string for display in the team list
+     */
+    private String formatTeamList(String teamList, String teamName) {
+        if (teamList.isEmpty()) {
+            return "";
+        }
+        String[] players = teamList.split(",");
+        StringBuilder sb = new StringBuilder();
+        for (String player : players) {
+            if (player.equals(playerName)) {
+                sb.append(player).append(" (You)\n");
+            } else {
+                sb.append(player).append("\n");
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Formats a chat message, adding "(You)" suffix if the message is from the current player.
+     *
+     * @param message The chat message to format
+     * @return Formatted chat message
+     */
+    private String formatChatMessage(String message) {
+        if (message.startsWith(playerName)) {
+            return message + " (You)";
+        }
+        return message;
+    }
 }
