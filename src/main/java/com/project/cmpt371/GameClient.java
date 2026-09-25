@@ -500,4 +500,150 @@ public class GameClient extends Application {
         }
         return message;
     }
+
+    /**
+     * Displays the game over screen with appropriate styling based on the winner.
+     *
+     * @param winner The winning team ("TEAM_A", "TEAM_B", or "TIE")
+     */
+    private void showWinScreen(String winner) {
+        // Set background color based on winner
+        Color backgroundColor = winner.equals("TEAM_A") ? Color.rgb(255, 85, 85, 0.9) :
+                winner.equals("TEAM_B") ? Color.rgb(85, 85, 255, 0.9) :
+                        Color.rgb(128, 128, 128, 0.9);
+        String headingText = winner.equals("TIE") ? "Game Over: Tie!" : 
+                "Team " + (winner.equals("TEAM_A") ? "A" : "B") + " Won";
+
+        // Create win screen layout
+        VBox winBox = new VBox(25);
+        winBox.setAlignment(Pos.CENTER);
+        winBox.getStyleClass().add("win-screen");
+        winBox.setBackground(new Background(new BackgroundFill(backgroundColor, null, null)));
+
+        // Create heading text
+        Text heading = new Text(headingText);
+        heading.setFont(Font.font("Segoe UI", 40));
+        heading.setFill(Color.WHITE);
+
+        // Create leave button
+        Button leaveButton = new Button("Leave");
+        leaveButton.setOnAction(e -> {
+            isRunning = false;
+            try {
+                socket.close();
+                primaryStage.close();
+            } catch (IOException ex) {
+                ex.printStackTrace();
+            }
+        });
+
+        // Store current name and team for potential rejoin
+        final String currentName = playerName;
+        final String currentTeam = teamColor;
+
+        // Create rejoin button
+        Button rejoinButton = new Button("Rejoin Game");
+        rejoinButton.setOnAction(e -> {
+            try {
+                socket.close();
+                primaryStage.close();
+                Platform.runLater(() -> {
+                    try {
+                        GameClient.playerName = currentName;
+                        GameClient.teamColor = currentTeam;
+                        new GameClient().start(new Stage());
+                    } catch (Exception ex) {
+                        ex.printStackTrace();
+                        showAlert("Error", "Failed to rejoin: " + ex.getMessage());
+                    }
+                });
+            } catch (IOException ex) {
+                ex.printStackTrace();
+                Platform.runLater(() -> showAlert("Error", "Failed to rejoin: " + ex.getMessage()));
+            }
+        });
+
+        // Create button container
+        HBox buttonBox = new HBox(20, leaveButton, rejoinButton);
+        buttonBox.setAlignment(Pos.CENTER);
+
+        // Assemble win screen
+        winBox.getChildren().addAll(heading, buttonBox);
+
+        // Create and set new scene
+        Scene winScene = new Scene(winBox, 800, 600);
+        winScene.getStylesheets().add(getClass().getResource("/css/client-style.css").toExternalForm());
+        primaryStage.setScene(winScene);
+    }
+
+    /**
+     * Updates the visual appearance of a grid square based on its current state.
+     *
+     * @param row The row of the square to update
+     * @param col The column of the square to update
+     */
+    private void updateBoard(int row, int col) {
+        Rectangle square = gridSquares.get(row + "," + col);
+        square.getStyleClass().removeAll("team-a-held", "team-b-held", "both-held", "team-a-claimed", "team-b-claimed");
+
+        if ("TEAM_A".equals(boardState[row][col])) {
+            // Square is claimed by Team A (Red)
+            square.getStyleClass().add("team-a-claimed");
+            square.setFill(Color.rgb(255, 0, 0));
+        } else if ("TEAM_B".equals(boardState[row][col])) {
+            // Square is claimed by Team B (Blue)
+            square.getStyleClass().add("team-b-claimed");
+            square.setFill(Color.rgb(0, 0, 255));
+        } else {
+            // Square is unclaimed, check if being held
+            List<String> holdingTeams = heldState[row][col];
+            if (holdingTeams.contains("TEAM_A") && holdingTeams.contains("TEAM_B")) {
+                // Both teams holding - create red/blue gradient (tug-of-war)
+                square.getStyleClass().add("both-held");
+                
+                // Create a red/blue linear gradient
+                Stop[] stops = new Stop[] {
+                    new Stop(0, Color.rgb(255, 0, 0, 0.5)),  // Light red
+                    new Stop(1, Color.rgb(0, 0, 255, 0.5))   // Light blue
+                };
+                LinearGradient gradient = new LinearGradient(0, 0, 1, 1, true, CycleMethod.NO_CYCLE, stops);
+                square.setFill(gradient);
+            } else if (holdingTeams.contains("TEAM_A")) {
+                // Only Team A holding
+                square.getStyleClass().add("team-a-held");
+                square.setFill(Color.rgb(255, 0, 0, 0.5)); // Light red
+            } else if (holdingTeams.contains("TEAM_B")) {
+                // Only Team B holding
+                square.getStyleClass().add("team-b-held");
+                square.setFill(Color.rgb(0, 0, 255, 0.5)); // Light blue
+            } else {
+                // No one holding
+                square.setFill(Color.LIGHTGRAY);
+                square.setStroke(Color.BLACK);
+            }
+        }
+    }
+
+    /**
+     * Displays an error alert dialog with the specified title and message.
+     *
+     * @param title The alert title
+     * @param message The alert message
+     */
+    private void showAlert(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
+    }
+
+    /**
+     * Main method to launch the application.
+     *
+     * @param args Command line arguments (not used)
+     */
+    public static void main(String[] args) {
+        launch(args);
+    }
 }
