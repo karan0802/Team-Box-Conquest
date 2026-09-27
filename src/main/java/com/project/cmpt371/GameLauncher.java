@@ -186,4 +186,208 @@ public class GameLauncher extends Application {
         hostScene.getStylesheets().add(getClass().getResource("/css/launcher-style.css").toExternalForm());
         primaryStage.setScene(hostScene);
     }
+
+    /**
+     * Displays the player setup screen for the host.
+     * Shows team status and allows name and team selection.
+     *
+     * @param primaryStage The primary stage to update
+     */
+    private void showHostPlayerSetup(Stage primaryStage) {
+        // Get current team status from local server
+        String[] teamStatus = getTeamStatus("localhost", 12345);
+        if (teamStatus == null) {
+            showAlert("Error", "Failed to get team status from server.");
+            return;
+        }
+        int teamACount = Integer.parseInt(teamStatus[0]);
+        int teamBCount = Integer.parseInt(teamStatus[1]);
+
+        // Create player name input
+        Label nameLabel = new Label("Enter Your Name:");
+        TextField nameField = new TextField();
+        
+        // Create team selection dropdown
+        Label teamLabel = new Label("Choose Team:");
+        ComboBox<String> teamChoice = new ComboBox<>();
+        teamChoice.getItems().addAll("Red (Team A)", "Blue (Team B)");
+        
+        // Display available spots for each team
+        Label teamStatusLabel = new Label("Red Team: " + (MAX_PLAYERS_PER_TEAM - teamACount) + 
+                " spots | Blue Team: " + (MAX_PLAYERS_PER_TEAM - teamBCount) + " spots");
+
+        // Create join button
+        Button joinButton = new Button("Join");
+        joinButton.setId("joinGameButton");
+        joinButton.setOnAction(e -> {
+            // Validate inputs
+            String name = nameField.getText().trim();
+            String team = teamChoice.getValue();
+            if (name.isEmpty() || team == null) {
+                showAlert("Error", "Please enter a name and select a team.");
+                return;
+            }
+            
+            // Verify team capacity
+            if (team.contains("Red") && teamACount >= MAX_PLAYERS_PER_TEAM) {
+                showAlert("Error", "Red Team is full!");
+                return;
+            }
+            if (team.contains("Blue") && teamBCount >= MAX_PLAYERS_PER_TEAM) {
+                showAlert("Error", "Blue Team is full!");
+                return;
+            }
+
+            // Set client properties
+            GameClient.serverIP = "localhost";
+            GameClient.serverPort = 12345;
+            GameClient.playerName = name;
+            GameClient.teamColor = team.contains("Red") ? "TEAM_A" : "TEAM_B";
+
+            // Launch the game client
+            launchClient(primaryStage);
+        });
+
+        // Layout for player setup screen
+        VBox centerBox = new VBox(15, nameLabel, nameField, teamLabel, teamChoice, teamStatusLabel, joinButton);
+        centerBox.setAlignment(Pos.CENTER);
+
+        // Update scene
+        Scene setupScene = new Scene(centerBox, 400, 300);
+        setupScene.getStylesheets().add(getClass().getResource("/css/launcher-style.css").toExternalForm());
+        primaryStage.setScene(setupScene);
+    }
+
+    /**
+     * Displays the join screen for connecting to an existing game.
+     * Allows entry of IP address and port.
+     *
+     * @param primaryStage The primary stage to update
+     */
+    private void showJoinScreen(Stage primaryStage) {
+        // Create IP input field
+        Label ipPrompt = new Label("Enter Host IP:");
+        TextField ipField = new TextField();
+        
+        // Create port input field with default value
+        Label portPrompt = new Label("Enter Port:");
+        TextField portField = new TextField("12345");
+
+        // Create join button
+        Button joinButton = new Button("Join");
+        joinButton.setId("joinGameButton");
+        joinButton.setOnAction(e -> {
+            // Validate input
+            String ip = ipField.getText().trim();
+            int port;
+            try {
+                port = Integer.parseInt(portField.getText().trim());
+            } catch (NumberFormatException ex) {
+                showAlert("Error", "Invalid port number.");
+                return;
+            }
+            if (ip.isEmpty()) {
+                showAlert("Error", "Please enter an IP address.");
+                return;
+            }
+
+            // Test connection and check server capacity
+            try (Socket tempSocket = new Socket(ip, port)) {
+                DataOutputStream tempOut = new DataOutputStream(tempSocket.getOutputStream());
+                DataInputStream tempIn = new DataInputStream(tempSocket.getInputStream());
+
+                tempOut.writeUTF("CHECK_CAPACITY");
+                String response = tempIn.readUTF();
+                if (response.equals("SERVER_FULL")) {
+                    showAlert("Error", "Server is full (6 players max).");
+                    return;
+                }
+
+                // Set connection parameters and proceed to player setup
+                GameClient.serverIP = ip;
+                GameClient.serverPort = port;
+                showJoinPlayerSetup(primaryStage);
+            } catch (IOException ex) {
+                showAlert("Error", "Failed to connect to server: " + ex.getMessage());
+            }
+        });
+
+        // Layout for join screen
+        VBox centerBox = new VBox(15, ipPrompt, ipField, portPrompt, portField, joinButton);
+        centerBox.setAlignment(Pos.CENTER);
+
+        // Update scene
+        Scene joinScene = new Scene(centerBox, 400, 300);
+        joinScene.getStylesheets().add(getClass().getResource("/css/launcher-style.css").toExternalForm());
+        primaryStage.setScene(joinScene);
+    }
+
+    /**
+     * Displays the player setup screen for a joining player.
+     * Shows team status and allows name and team selection.
+     *
+     * @param primaryStage The primary stage to update
+     */
+    private void showJoinPlayerSetup(Stage primaryStage) {
+        // Get team status from remote server
+        String[] teamStatus = getTeamStatus(GameClient.serverIP, GameClient.serverPort);
+        if (teamStatus == null) {
+            showAlert("Error", "Failed to get team status from server.");
+            return;
+        }
+        int teamACount = Integer.parseInt(teamStatus[0]);
+        int teamBCount = Integer.parseInt(teamStatus[1]);
+
+        // Create player name input
+        Label nameLabel = new Label("Enter Your Name:");
+        TextField nameField = new TextField();
+        
+        // Create team selection dropdown
+        Label teamLabel = new Label("Choose Team:");
+        ComboBox<String> teamChoice = new ComboBox<>();
+        teamChoice.getItems().addAll("Red (Team A)", "Blue (Team B)");
+        
+        // Display available spots for each team
+        Label teamStatusLabel = new Label("Red Team: " + (MAX_PLAYERS_PER_TEAM - teamACount) + 
+                " spots | Blue Team: " + (MAX_PLAYERS_PER_TEAM - teamBCount) + " spots");
+
+        // Create join button
+        Button joinButton = new Button("Join");
+        joinButton.setId("joinGameButton");
+        joinButton.setOnAction(e -> {
+            // Validate inputs
+            String name = nameField.getText().trim();
+            String team = teamChoice.getValue();
+            if (name.isEmpty() || team == null) {
+                showAlert("Error", "Please enter a name and select a team.");
+                return;
+            }
+            
+            // Verify team capacity
+            if (team.contains("Red") && teamACount >= MAX_PLAYERS_PER_TEAM) {
+                showAlert("Error", "Red Team is full!");
+                return;
+            }
+            if (team.contains("Blue") && teamBCount >= MAX_PLAYERS_PER_TEAM) {
+                showAlert("Error", "Blue Team is full!");
+                return;
+            }
+
+            // Set client properties (server IP and port already set)
+            GameClient.playerName = name;
+            GameClient.teamColor = team.contains("Red") ? "TEAM_A" : "TEAM_B";
+
+            // Launch the game client
+            launchClient(primaryStage);
+        });
+
+        // Layout for player setup screen
+        VBox centerBox = new VBox(15, nameLabel, nameField, teamLabel, teamChoice, teamStatusLabel, joinButton);
+        centerBox.setAlignment(Pos.CENTER);
+
+        // Update scene
+        Scene setupScene = new Scene(centerBox, 400, 300);
+        setupScene.getStylesheets().add(getClass().getResource("/css/launcher-style.css").toExternalForm());
+        primaryStage.setScene(setupScene);
+    }
 }
