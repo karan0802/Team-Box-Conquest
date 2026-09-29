@@ -390,4 +390,80 @@ public class GameLauncher extends Application {
         setupScene.getStylesheets().add(getClass().getResource("/css/launcher-style.css").toExternalForm());
         primaryStage.setScene(setupScene);
     }
+
+    /**
+     * Launches the game client in a new window and closes the launcher.
+     *
+     * @param primaryStage The launcher stage to close after launching
+     */
+    private void launchClient(Stage primaryStage) {
+        new Thread(() -> {
+            try {
+                Platform.runLater(() -> {
+                    try {
+                        // Start new GameClient instance in a new window
+                        new GameClient().start(new Stage());
+                    } catch (Exception ex) {
+                        ex.printStackTrace();
+                        showAlert("Error", "Failed to launch client: " + ex.getMessage());
+                    }
+                });
+                // Close the launcher window
+                Platform.runLater(primaryStage::close);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }).start();
+    }
+
+    /**
+     * Queries the server for current team occupancy status.
+     *
+     * @param ip   The server IP address
+     * @param port The server port
+     * @return String array with [teamACount, teamBCount] or null if request fails
+     */
+    private String[] getTeamStatus(String ip, int port) {
+        try (Socket socket = new Socket(ip, port)) {
+            // Create data streams for communication
+            DataOutputStream out = new DataOutputStream(socket.getOutputStream());
+            DataInputStream in = new DataInputStream(socket.getInputStream());
+
+            // Send team status request
+            out.writeUTF("TEAM_STATUS_REQUEST");
+            String response = in.readUTF();
+            
+            // Parse response if valid
+            if (response.startsWith("TEAM_STATUS")) {
+                String[] parts = response.split(" ");
+                return new String[]{parts[1], parts[2]};
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    /**
+     * Displays an error alert dialog with the specified title and message.
+     *
+     * @param title   The alert title
+     * @param message The alert message
+     */
+    private void showAlert(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
+    }
+
+    /**
+     * Main method to launch the application.
+     *
+     * @param args Command line arguments (not used)
+     */
+    public static void main(String[] args) {
+        launch(args);
+    }
 }
